@@ -1,0 +1,96 @@
+{
+  "_comment": [
+    "This file is a task definition TEMPLATE used by CodePipeline + CodeDeploy for blue/green ECS deployments.",
+    "",
+    "Placeholders replaced at deploy time:",
+    "  <IMAGE1_NAME>          - replaced by CodePipeline/CodeDeploy with the actual ECR image URI from the ECR source action",
+    "  <EXECUTION_ROLE_ARN>   - replaced by GitHub Actions (prepare-deploy step) with the ECS task execution role ARN",
+    "  <TASK_ROLE_ARN>        - replaced by GitHub Actions with the ECS task role ARN",
+    "  <DB_SECRET_ARN>        - replaced by GitHub Actions with the Secrets Manager secret ARN for DB credentials",
+    "  <LOG_GROUP>            - replaced by GitHub Actions with the CloudWatch log group name (e.g. /ecs/prod/fotos)",
+    "  <AWS_REGION>           - replaced by GitHub Actions with the deployment region (e.g. eu-west-1)",
+    "  <DB_ENDPOINT>          - replaced by GitHub Actions with the RDS instance endpoint hostname",
+    "  <DB_PORT>              - replaced by GitHub Actions with the RDS port (5432)",
+    "  <DB_NAME>              - replaced by GitHub Actions with the database name (fotosdb)",
+    "  <S3_BUCKET_NAME>       - replaced by GitHub Actions with the photos S3 bucket name",
+    "  <CLOUDFRONT_BASE_URL>  - replaced by GitHub Actions with the CloudFront distribution URL",
+    "",
+    "The <IMAGE1_NAME> placeholder is the fixed string CodePipeline looks for in this file.",
+    "It is replaced with the ECR image URI from the ECR source action.",
+    "Image1ContainerName in the CodePipeline action must match the container name ('app')."
+  ],
+  "family": "prod-fotos",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "<EXECUTION_ROLE_ARN>",
+  "taskRoleArn": "<TASK_ROLE_ARN>",
+  "containerDefinitions": [
+    {
+      "name": "app",
+      "image": "<IMAGE1_NAME>",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "DB_HOST",
+          "value": "<DB_ENDPOINT>"
+        },
+        {
+          "name": "DB_PORT",
+          "value": "<DB_PORT>"
+        },
+        {
+          "name": "DB_NAME",
+          "value": "<DB_NAME>"
+        },
+        {
+          "name": "S3_BUCKET_NAME",
+          "value": "<S3_BUCKET_NAME>"
+        },
+        {
+          "name": "CLOUDFRONT_BASE_URL",
+          "value": "<CLOUDFRONT_BASE_URL>"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "<AWS_REGION>"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DB_USER",
+          "valueFrom": "<DB_SECRET_ARN>:username::"
+        },
+        {
+          "name": "DB_PASSWORD",
+          "valueFrom": "<DB_SECRET_ARN>:password::"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/actuator/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "<LOG_GROUP>",
+          "awslogs-region": "<AWS_REGION>",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

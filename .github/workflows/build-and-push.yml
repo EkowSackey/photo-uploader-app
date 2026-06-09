@@ -1,0 +1,95 @@
+name: Build and Push to ECR
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ENV_NAME: prod
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Read every value we need from CloudFormation exports in one pass.
+      # All nested stacks export their outputs under the pattern: ${ENV_NAME}-<Key>
+      - name: Read CloudFormation exports
+        id: cfn
+        run: |
+          get_export() {
+            aws cloudformation list-exports \
+              --query "Exports[?Name=='$1'].Value" \
+              --output text
+          }
+
+          echo "ecr_uri=$(get_export '${{ env.ENV_NAME }}-ECRRepositoryUri')"         >> $GITHUB_OUTPUT
+          echo "exec_role=$(get_export '${{ env.ENV_NAME }}-EcsTaskExecutionRoleArn')" >> $GITHUB_OUTPUT
+          echo "task_role=$(get_export '${{ env.ENV_NAME }}-EcsTaskRoleArn')"          >> $GITHUB_OUTPUT
+          echo "db_secret_arn=$(get_export '${{ env.ENV_NAME }}-DBSecretArn')"         >> $GITHUB_OUTPUT
+          echo "db_endpoint=$(get_export '${{ env.ENV_NAME }}-DBEndpoint')"            >> $GITHUB_OUTPUT
+          echo "db_name=$(get_export '${{ env.ENV_NAME }}-DBName')"                    >> $GITHUB_OUTPUT
+          echo "bucket_name=$(get_export '${{ env.ENV_NAME }}-PhotosBucketName')"      >> $GITHUB_OUTPUT
+          echo "cf_domain=$(get_export '${{ env.ENV_NAME }}-CloudFrontDomainName')"    >> $GITHUB_OUTPUT
+          echo "artifacts_bucket=$(get_export '${{ env.ENV_NAME }}-ArtifactsBucketName')" >> $GITHUB_OUTPUT
+          echo "log_group=$(get_export '${{ env.ENV_NAME }}-LogGroupName')"            >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        env:
+          ECR_URI: ${{ steps.cfn.outputs.ecr_uri }}
+        run: |
+          docker build -t $ECR_URI:latest .
+          docker push $ECR_URI:latest
+
+      # Fill every placeholder in taskdef.json with real values from CloudFormation.
+      # <IMAGE1_NAME> is intentionally left — CodePipeline/CodeDeploy replaces it
+      # with the actual ECR image URI from the ECR source action at deploy time.
+      - name: Prepare deploy bundle
+        env:
+          EXEC_ROLE:    ${{ steps.cfn.outputs.exec_role }}
+          TASK_ROLE:    ${{ steps.cfn.outputs.task_role }}
+          DB_SECRET:    ${{ steps.cfn.outputs.db_secret_arn }}
+          DB_ENDPOINT:  ${{ steps.cfn.outputs.db_endpoint }}
+          DB_NAME:      ${{ steps.cfn.outputs.db_name }}
+          BUCKET:       ${{ steps.cfn.outputs.bucket_name }}
+          CF_DOMAIN:    ${{ steps.cfn.outputs.cf_domain }}
+          LOG_GROUP:    ${{ steps.cfn.outputs.log_group }}
+          REGION:       ${{ secrets.AWS_REGION }}
+        run: |
+          sed \
+            -e "s|<EXECUTION_ROLE_ARN>|${EXEC_ROLE}|g" \
+            -e "s|<TASK_ROLE_ARN>|${TASK_ROLE}|g" \
+            -e "s|<DB_SECRET_ARN>|${DB_SECRET}|g" \
+            -e "s|<DB_ENDPOINT>|${DB_ENDPOINT}|g" \
+            -e "s|<DB_PORT>|5432|g" \
+            -e "s|<DB_NAME>|${DB_NAME}|g" \
+            -e "s|<S3_BUCKET_NAME>|${BUCKET}|g" \
+            -e "s|<CLOUDFRONT_BASE_URL>|https://${CF_DOMAIN}|g" \
+            -e "s|<LOG_GROUP>|${LOG_GROUP}|g" \
+            -e "s|<AWS_REGION>|${REGION}|g" \
+            taskdef.json > taskdef-filled.json
+
+          zip bundle.zip appspec.yaml taskdef-filled.json
+
+      - name: Upload deploy bundle to S3
+        env:
+          ARTIFACTS_BUCKET: ${{ steps.cfn.outputs.artifacts_bucket }}
+        run: |
+          aws s3 cp bundle.zip s3://$ARTIFACTS_BUCKET/deploy-bundle/bundle.zip

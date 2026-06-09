@@ -1,0 +1,12 @@
+agents/
+infra/
+.claude/
+target/
+.idea/
+.vscode/
+*.iml
+*.log
+.DS_Store
+.env
+uploads/
+STUDY_GUIDE.md
