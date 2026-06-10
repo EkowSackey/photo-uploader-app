@@ -86,7 +86,8 @@ jobs:
             -e "s|<AWS_REGION>|${REGION}|g" \
             taskdef.json > taskdef-filled.json
 
-          zip bundle.zip appspec.yaml taskdef-filled.json
+          mv taskdef-filled.json taskdef.json
+          zip bundle.zip appspec.yaml taskdef.json
 
       - name: Upload deploy bundle to S3
         env:
