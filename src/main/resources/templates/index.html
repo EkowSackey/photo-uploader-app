@@ -2,18 +2,18 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>Photo Uploader</title>
+    <title>Photo Uploader.</title>
     <link rel="stylesheet" th:href="@{/styles.css}">
 </head>
 <body>
 <div class="container">
-    <h1>Photo Uploader</h1>
+    <h1>Photo Uploader. Pre Lab test</h1>
 
     <form method="post" action="/upload" enctype="multipart/form-data" class="upload-form">
         <label for="file">Image</label>
         <input id="file" type="file" name="file" accept="image/*" required>
 
-        <label for="description">Description</label>
+        <label for="description"> Add a Description</label>
         <textarea id="description" name="description" rows="3" maxlength="500" required></textarea>
 
         <button type="submit">Upload</button>

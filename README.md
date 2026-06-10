@@ -1,2 +1,2 @@
 # photo-uploader-app
-deployed?
+deployed? y
