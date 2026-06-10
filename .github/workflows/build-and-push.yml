@@ -51,16 +51,9 @@ jobs:
           echo "artifacts_bucket=$(get_export '${{ env.ENV_NAME }}-ArtifactsBucketName')" >> $GITHUB_OUTPUT
           echo "log_group=$(get_export '${{ env.ENV_NAME }}-LogGroupName')"            >> $GITHUB_OUTPUT
 
-      - name: Build and push Docker image
-        env:
-          ECR_URI: ${{ steps.cfn.outputs.ecr_uri }}
-        run: |
-          docker build -t $ECR_URI:latest .
-          docker push $ECR_URI:latest
-
       # Fill every placeholder in taskdef.json with real values from CloudFormation.
-      # <IMAGE1_NAME> is intentionally left — CodePipeline/CodeDeploy replaces it
-      # with the actual ECR image URI from the ECR source action at deploy time.
+      # <IMAGE1_NAME> is intentionally left — CodePipeline replaces it with the
+      # actual ECR image URI from the ECR source action at deploy time.
       - name: Prepare deploy bundle
         env:
           EXEC_ROLE:    ${{ steps.cfn.outputs.exec_role }}
@@ -94,3 +87,10 @@ jobs:
           ARTIFACTS_BUCKET: ${{ steps.cfn.outputs.artifacts_bucket }}
         run: |
           aws s3 cp bundle.zip s3://$ARTIFACTS_BUCKET/deploy-bundle/bundle.zip
+
+      - name: Build and push Docker image
+        env:
+          ECR_URI: ${{ steps.cfn.outputs.ecr_uri }}
+        run: |
+          docker build -t $ECR_URI:latest .
+          docker push $ECR_URI:latest
