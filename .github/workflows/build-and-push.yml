@@ -10,6 +10,7 @@ permissions:
 
 env:
   ENV_NAME: prod
+  APP_NAME: fotos
 
 jobs:
   build-and-push:
@@ -17,80 +18,61 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Java 21
+        uses: actions/setup-java@b36c23c0d998641eff861008f374ee103c25ac73 # v4.4.0
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run tests
+        run: mvn test
 
       - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@5579c002bb4778aa43395ef1df492868a9a1c83f # v4.0.2
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # Read every value we need from CloudFormation exports in one pass.
-      # All nested stacks export their outputs under the pattern: ${ENV_NAME}-<Key>
-      - name: Read CloudFormation exports
-        id: cfn
-        run: |
-          get_export() {
-            aws cloudformation list-exports \
-              --query "Exports[?Name=='$1'].Value" \
-              --output text
-          }
-
-          echo "ecr_uri=$(get_export '${{ env.ENV_NAME }}-ECRRepositoryUri')"         >> $GITHUB_OUTPUT
-          echo "exec_role=$(get_export '${{ env.ENV_NAME }}-EcsTaskExecutionRoleArn')" >> $GITHUB_OUTPUT
-          echo "task_role=$(get_export '${{ env.ENV_NAME }}-EcsTaskRoleArn')"          >> $GITHUB_OUTPUT
-          echo "db_secret_arn=$(get_export '${{ env.ENV_NAME }}-DBSecretArn')"         >> $GITHUB_OUTPUT
-          echo "db_endpoint=$(get_export '${{ env.ENV_NAME }}-DBEndpoint')"            >> $GITHUB_OUTPUT
-          echo "db_name=$(get_export '${{ env.ENV_NAME }}-DBName')"                    >> $GITHUB_OUTPUT
-          echo "bucket_name=$(get_export '${{ env.ENV_NAME }}-PhotosBucketName')"      >> $GITHUB_OUTPUT
-          echo "cf_domain=$(get_export '${{ env.ENV_NAME }}-CloudFrontDomainName')"    >> $GITHUB_OUTPUT
-          echo "artifacts_bucket=$(get_export '${{ env.ENV_NAME }}-ArtifactsBucketName')" >> $GITHUB_OUTPUT
-          echo "log_group=$(get_export '${{ env.ENV_NAME }}-LogGroupName')"            >> $GITHUB_OUTPUT
-
-      # Fill every placeholder in taskdef.json with real values from CloudFormation.
-      # <IMAGE1_NAME> is intentionally left — CodePipeline replaces it with the
-      # actual ECR image URI from the ECR source action at deploy time.
-      - name: Prepare deploy bundle
-        env:
-          EXEC_ROLE:    ${{ steps.cfn.outputs.exec_role }}
-          TASK_ROLE:    ${{ steps.cfn.outputs.task_role }}
-          DB_SECRET:    ${{ steps.cfn.outputs.db_secret_arn }}
-          DB_ENDPOINT:  ${{ steps.cfn.outputs.db_endpoint }}
-          DB_NAME:      ${{ steps.cfn.outputs.db_name }}
-          BUCKET:       ${{ steps.cfn.outputs.bucket_name }}
-          CF_DOMAIN:    ${{ steps.cfn.outputs.cf_domain }}
-          LOG_GROUP:    ${{ steps.cfn.outputs.log_group }}
-          REGION:       ${{ secrets.AWS_REGION }}
-        run: |
-          sed \
-            -e "s|<EXECUTION_ROLE_ARN>|${EXEC_ROLE}|g" \
-            -e "s|<TASK_ROLE_ARN>|${TASK_ROLE}|g" \
-            -e "s|<DB_SECRET_ARN>|${DB_SECRET}|g" \
-            -e "s|<DB_ENDPOINT>|${DB_ENDPOINT}|g" \
-            -e "s|<DB_PORT>|5432|g" \
-            -e "s|<DB_NAME>|${DB_NAME}|g" \
-            -e "s|<S3_BUCKET_NAME>|${BUCKET}|g" \
-            -e "s|<CLOUDFRONT_BASE_URL>|https://${CF_DOMAIN}|g" \
-            -e "s|<LOG_GROUP>|${LOG_GROUP}|g" \
-            -e "s|<AWS_REGION>|${REGION}|g" \
-            taskdef.json > taskdef-filled.json
-
-          mv taskdef-filled.json taskdef.json
-          zip bundle.zip appspec.yaml taskdef.json
-
-      - name: Upload deploy bundle to S3
-        env:
-          ARTIFACTS_BUCKET: ${{ steps.cfn.outputs.artifacts_bucket }}
-        run: |
-          aws s3 cp bundle.zip s3://$ARTIFACTS_BUCKET/deploy-bundle/bundle.zip
+        uses: aws-actions/amazon-ecr-login@4625ce35226a7557230889aae2f52eb50ec3dcda # v2.0.1
 
       - name: Build and push Docker image
         env:
-          ECR_URI: ${{ steps.cfn.outputs.ecr_uri }}
+          ECR_URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ENV_NAME }}/${{ env.APP_NAME }}
         run: |
-          docker build -t $ECR_URI:latest .
+          IMAGE_TAG=sha-${{ github.sha }}
+          docker build -t $ECR_URI:$IMAGE_TAG -t $ECR_URI:latest .
+          docker push $ECR_URI:$IMAGE_TAG
           docker push $ECR_URI:latest
+
+      - name: Resolve SSM values for deploy bundle
+        id: resolve
+        run: |
+          DB_SECRET_ARN=$(aws ssm get-parameter \
+            --name /fotos/${{ env.ENV_NAME }}/db-secret-arn \
+            --query Parameter.Value \
+            --output text)
+          ARTIFACTS_BUCKET=$(aws ssm get-parameter \
+            --name /fotos/${{ env.ENV_NAME }}/artifacts-bucket-name \
+            --query Parameter.Value \
+            --output text)
+          echo "db_secret_arn=${DB_SECRET_ARN}" >> $GITHUB_OUTPUT
+          echo "artifacts_bucket=${ARTIFACTS_BUCKET}" >> $GITHUB_OUTPUT
+
+      - name: Prepare and upload deploy bundle
+        env:
+          DB_SECRET_ARN: ${{ steps.resolve.outputs.db_secret_arn }}
+          ARTIFACTS_BUCKET: ${{ steps.resolve.outputs.artifacts_bucket }}
+        run: |
+          sed \
+            -e "s|<EXECUTION_ROLE_ARN>|${{ secrets.EXECUTION_ROLE_ARN }}|g" \
+            -e "s|<TASK_ROLE_ARN>|${{ secrets.TASK_ROLE_ARN }}|g" \
+            -e "s|<DB_SECRET_ARN>|${DB_SECRET_ARN}|g" \
+            taskdef.json > taskdef-filled.json
+          mv taskdef-filled.json taskdef.json
+          zip bundle.zip appspec.yaml taskdef.json
+          aws s3 cp bundle.zip s3://${ARTIFACTS_BUCKET}/deploy-bundle/bundle.zip

@@ -4,11 +4,11 @@ import com.example.fotos.config.S3Properties;
 import com.example.fotos.entity.Photo;
 import com.example.fotos.repository.PhotoRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.OffsetDateTime;
 import java.util.List;
 
 @Service
@@ -27,15 +27,21 @@ public class PhotoService {
     }
 
     public List<Photo> findAll() {
-        return photoRepository.findAll()
-                .stream()
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                .toList();
+        return photoRepository.findAllByOrderByCreatedAtDesc();
     }
 
-    public void upload(MultipartFile file, String description) throws IOException {
+    @Transactional
+    public void upload(MultipartFile file, String title, String artist, String description) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Image file is required");
+        }
+
+        if (!StringUtils.hasText(title)) {
+            throw new IllegalArgumentException("Title is required");
+        }
+
+        if (!StringUtils.hasText(artist)) {
+            throw new IllegalArgumentException("Artist is required");
         }
 
         if (!StringUtils.hasText(description)) {
@@ -44,11 +50,40 @@ public class PhotoService {
 
         String key = storageService.store(file);
 
-        Photo photo = new Photo();
-        photo.setS3Key(key);
-        photo.setDescription(description.trim());
-        photo.setCreatedAt(OffsetDateTime.now());
+        try {
+            Photo photo = new Photo();
+            photo.setTitle(title.trim());
+            photo.setArtist(artist.trim());
+            photo.setS3Key(key);
+            photo.setDescription(description.trim());
+            photoRepository.save(photo);
+        } catch (Exception e) {
+            storageService.delete(key);
+            throw e;
+        }
+    }
 
+    public Photo findById(Long id) {
+        return photoRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Photo not found"));
+    }
+
+    @Transactional
+    public void deleteById(Long id) {
+        Photo photo = findById(id);
+        storageService.delete(photo.getS3Key());
+        photoRepository.deleteById(id);
+    }
+
+    @Transactional
+    public void update(Long id, String title, String artist, String description) {
+        if (!StringUtils.hasText(title)) throw new IllegalArgumentException("Title is required");
+        if (!StringUtils.hasText(artist)) throw new IllegalArgumentException("Artist is required");
+        if (!StringUtils.hasText(description)) throw new IllegalArgumentException("Description is required");
+        Photo photo = findById(id);
+        photo.setTitle(title.trim());
+        photo.setArtist(artist.trim());
+        photo.setDescription(description.trim());
         photoRepository.save(photo);
     }
 

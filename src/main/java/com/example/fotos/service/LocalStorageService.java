@@ -10,11 +10,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
+import java.util.logging.Logger;
 
 @Service
 @Profile("local")
 public class LocalStorageService implements StorageService {
 
+    private static final Logger log = Logger.getLogger(LocalStorageService.class.getName());
     private final Path root = Path.of("uploads");
 
     @Override
@@ -27,5 +29,14 @@ public class LocalStorageService implements StorageService {
 
         Files.copy(file.getInputStream(), root.resolve(key), StandardCopyOption.REPLACE_EXISTING);
         return key;
+    }
+
+    @Override
+    public void delete(String key) {
+        try {
+            Files.deleteIfExists(root.resolve(key));
+        } catch (IOException e) {
+            log.warning("Failed to delete local file: " + key);
+        }
     }
 }

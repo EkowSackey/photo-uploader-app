@@ -1,17 +1,24 @@
 server:
   port: ${PORT:8080}
+  shutdown: graceful
 
 spring:
   application:
     name: fotos
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:photodb}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 20000
+      idle-timeout: 300000
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
         jdbc:
@@ -21,8 +28,6 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-  thymeleaf:
-    cache: false
 
 management:
   endpoints:
@@ -48,3 +53,5 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:photodb}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
+  thymeleaf:
+    cache: false

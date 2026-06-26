@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Artwork — Fotos</title>
+    <link rel="stylesheet" th:href="@{/styles.css}">
+</head>
+<body class="upload-page">
+
+<header class="site-header">
+    <a href="/" class="back-link">&#8592; Gallery</a>
+    <span class="wordmark">Fotos</span>
+    <span></span>
+</header>
+
+<main>
+    <div class="upload-wrapper">
+        <div class="upload-card">
+            <h1 class="upload-title">Edit Artwork</h1>
+
+            <div class="error-banner" th:if="${error}" th:text="${error}"></div>
+
+            <form th:action="@{/photos/{id}/edit(id=${photo.id})}" method="post" id="edit-form">
+
+                <div class="form-group">
+                    <label for="title">Title</label>
+                    <input id="title" type="text" name="title" maxlength="200" required
+                           th:value="${photo.title}" placeholder="e.g. Starry Night">
+                </div>
+
+                <div class="form-group">
+                    <label for="artist">Artist</label>
+                    <input id="artist" type="text" name="artist" maxlength="200" required
+                           th:value="${photo.artist}" placeholder="e.g. Vincent van Gogh">
+                </div>
+
+                <div class="form-group">
+                    <label for="description">
+                        Description
+                        <span class="char-count" id="char-count">0 / 500</span>
+                    </label>
+                    <textarea id="description" name="description" rows="4" maxlength="500" required
+                              placeholder="Describe this artwork..." th:text="${photo.description}"></textarea>
+                </div>
+
+                <button type="submit" class="btn-primary btn-submit">Save Changes</button>
+
+            </form>
+        </div>
+    </div>
+</main>
+
+<script th:src="@{/app.js}"></script>
+</body>
+</html>

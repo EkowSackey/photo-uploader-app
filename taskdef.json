@@ -11,6 +11,7 @@
       "name": "app",
       "image": "<IMAGE1_NAME>",
       "essential": true,
+      "stopTimeout": 45,
       "portMappings": [
         {
           "containerPort": 8080,
@@ -19,31 +20,35 @@
       ],
       "environment": [
         {
-          "name": "DB_HOST",
-          "value": "<DB_ENDPOINT>"
-        },
-        {
-          "name": "DB_PORT",
-          "value": "<DB_PORT>"
-        },
-        {
-          "name": "DB_NAME",
-          "value": "<DB_NAME>"
-        },
-        {
-          "name": "S3_BUCKET_NAME",
-          "value": "<S3_BUCKET_NAME>"
-        },
-        {
-          "name": "CLOUDFRONT_BASE_URL",
-          "value": "<CLOUDFRONT_BASE_URL>"
+          "name": "JAVA_TOOL_OPTIONS",
+          "value": "-XX:MaxRAMPercentage=75.0"
         },
         {
           "name": "AWS_REGION",
-          "value": "<AWS_REGION>"
+          "value": "eu-west-1"
+        },
+        {
+          "name": "DB_PORT",
+          "value": "5432"
         }
       ],
       "secrets": [
+        {
+          "name": "DB_HOST",
+          "valueFrom": "/fotos/prod/db-endpoint"
+        },
+        {
+          "name": "DB_NAME",
+          "valueFrom": "/fotos/prod/db-name"
+        },
+        {
+          "name": "S3_BUCKET_NAME",
+          "valueFrom": "/fotos/prod/s3-bucket-name"
+        },
+        {
+          "name": "CLOUDFRONT_BASE_URL",
+          "valueFrom": "/fotos/prod/cloudfront-url"
+        },
         {
           "name": "DB_USER",
           "valueFrom": "<DB_SECRET_ARN>:username::"
@@ -66,8 +71,8 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "<LOG_GROUP>",
-          "awslogs-region": "<AWS_REGION>",
+          "awslogs-group": "/ecs/prod/fotos",
+          "awslogs-region": "eu-west-1",
           "awslogs-stream-prefix": "ecs"
         }
       }

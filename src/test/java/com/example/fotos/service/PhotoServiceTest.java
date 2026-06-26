@@ -33,34 +33,65 @@ class PhotoServiceTest {
     }
 
     @Test
-    void upload_savesPhotoWithCorrectFields() throws IOException {
+    void upload_savesArtworkWithAllFields() throws IOException {
         MockMultipartFile file = new MockMultipartFile(
-                "file", "cat.jpg", "image/jpeg", "fake-image-bytes".getBytes());
-        when(storageService.store(file)).thenReturn("uuid-cat.jpg");
+                "file", "painting.jpg", "image/jpeg", "fake-image-bytes".getBytes());
+        when(storageService.store(file)).thenReturn("uuid-painting.jpg");
 
-        photoService.upload(file, "A cute cat");
+        photoService.upload(file, "Starry Night", "Van Gogh", "A swirling night sky");
 
         verify(photoRepository).save(argThat(photo ->
-                "uuid-cat.jpg".equals(photo.getS3Key()) &&
-                "A cute cat".equals(photo.getDescription()) &&
-                photo.getCreatedAt() != null
+                "uuid-painting.jpg".equals(photo.getS3Key()) &&
+                "Starry Night".equals(photo.getTitle()) &&
+                "Van Gogh".equals(photo.getArtist()) &&
+                "A swirling night sky".equals(photo.getDescription())
         ));
     }
 
     @Test
     void upload_throwsWhenFileIsEmpty() {
         MockMultipartFile empty = new MockMultipartFile("file", new byte[0]);
-        assertThatThrownBy(() -> photoService.upload(empty, "desc"))
+        assertThatThrownBy(() -> photoService.upload(empty, "Title", "Artist", "desc"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("required");
+    }
+
+    @Test
+    void upload_throwsWhenTitleIsBlank() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "img.jpg", "image/jpeg", new byte[]{1});
+        assertThatThrownBy(() -> photoService.upload(file, "   ", "Artist", "desc"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Title");
+    }
+
+    @Test
+    void upload_throwsWhenArtistIsBlank() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "img.jpg", "image/jpeg", new byte[]{1});
+        assertThatThrownBy(() -> photoService.upload(file, "Title", "  ", "desc"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Artist");
     }
 
     @Test
     void upload_throwsWhenDescriptionIsBlank() throws IOException {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "img.jpg", "image/jpeg", new byte[]{1});
-        assertThatThrownBy(() -> photoService.upload(file, "   "))
+        assertThatThrownBy(() -> photoService.upload(file, "Title", "Artist", "   "))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void upload_cleansUpS3KeyWhenSaveFails() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "img.jpg", "image/jpeg", new byte[]{1});
+        when(storageService.store(file)).thenReturn("uuid-img.jpg");
+        when(photoRepository.save(any())).thenThrow(new RuntimeException("DB down"));
+
+        assertThatThrownBy(() -> photoService.upload(file, "Title", "Artist", "desc"))
+                .isInstanceOf(RuntimeException.class);
+        verify(storageService).delete("uuid-img.jpg");
     }
 
     @Test
@@ -78,21 +109,22 @@ class PhotoServiceTest {
     }
 
     @Test
-    void findAll_returnsSortedByCreatedAtDesc() {
-        Photo older = makePhoto("a", OffsetDateTime.now().minusDays(2));
-        Photo newer = makePhoto("b", OffsetDateTime.now());
-        when(photoRepository.findAll()).thenReturn(List.of(older, newer));
+    void findAll_delegatesToRepositorySortedMethod() {
+        Photo a = makePhoto("a");
+        Photo b = makePhoto("b");
+        when(photoRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(b, a));
 
         List<Photo> result = photoService.findAll();
 
-        assertThat(result).first().extracting(Photo::getS3Key).isEqualTo("b");
+        assertThat(result).extracting(Photo::getS3Key).containsExactly("b", "a");
     }
 
-    private Photo makePhoto(String key, OffsetDateTime createdAt) {
+    private Photo makePhoto(String key) {
         Photo p = new Photo();
+        p.setTitle("Title");
+        p.setArtist("Artist");
         p.setS3Key(key);
         p.setDescription("desc");
-        p.setCreatedAt(createdAt);
         return p;
     }
 }

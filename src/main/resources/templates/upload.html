@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Artwork — Fotos</title>
+    <link rel="stylesheet" th:href="@{/styles.css}">
+</head>
+<body class="upload-page">
+
+<header class="site-header">
+    <a href="/" class="back-link">&#8592; Gallery</a>
+    <span class="wordmark">Fotos</span>
+    <span></span>
+</header>
+
+<main>
+    <div class="upload-wrapper">
+        <div class="upload-card">
+            <h1 class="upload-title">Add Artwork</h1>
+
+            <div class="error-banner" th:if="${error}" th:text="${error}"></div>
+
+            <form method="post" action="/upload" enctype="multipart/form-data" id="upload-form">
+
+                <div class="form-group">
+                    <label for="title">Title</label>
+                    <input id="title" type="text" name="title" maxlength="200" required
+                           th:value="${title}" placeholder="e.g. Starry Night">
+                </div>
+
+                <div class="form-group">
+                    <label for="artist">Artist</label>
+                    <input id="artist" type="text" name="artist" maxlength="200" required
+                           th:value="${artist}" placeholder="e.g. Vincent van Gogh">
+                </div>
+
+                <div class="form-group">
+                    <label for="description">
+                        Description
+                        <span class="char-count" id="char-count">0 / 500</span>
+                    </label>
+                    <textarea id="description" name="description" rows="4" maxlength="500" required
+                              placeholder="Describe this artwork..." th:text="${description}"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Image</label>
+                    <div class="drop-zone" id="drop-zone">
+                        <span class="drop-zone-text" id="drop-zone-text">
+                            Drop image here or <strong>click to browse</strong>
+                        </span>
+                        <input id="file-input" type="file" name="file" accept="image/*" required>
+                    </div>
+                </div>
+
+                <button type="submit" id="submit-btn" class="btn-primary btn-submit">Upload Artwork</button>
+
+            </form>
+        </div>
+    </div>
+</main>
+
+<script th:src="@{/app.js}"></script>
+</body>
+</html>
