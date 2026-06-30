@@ -25,7 +25,7 @@
         },
         {
           "name": "AWS_REGION",
-          "value": "eu-west-1"
+          "value": "eu-central-1"
         },
         {
           "name": "DB_PORT",
@@ -72,7 +72,7 @@
         "logDriver": "awslogs",
         "options": {
           "awslogs-group": "/ecs/prod/fotos",
-          "awslogs-region": "eu-west-1",
+          "awslogs-region": "eu-central-1",
           "awslogs-stream-prefix": "ecs"
         }
       }
